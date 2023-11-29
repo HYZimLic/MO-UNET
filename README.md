@@ -20,6 +20,7 @@ Environment settings
 
 Data set
 -Training: The training folder contains .npy files with corresponding names under the img and mask files.
+
   -train
     --img
       ---1.npy
