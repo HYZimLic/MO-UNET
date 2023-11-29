@@ -3,7 +3,6 @@ A fully automated, multi-output deep learning algorithm for multiple lesion segm
 
 In the diagnosis of chronic CSVD, cranial MRI imaging methods are preferred, including T2-FLAIR, SWI, and T2 sequences, which correspond to white matter hyperintensity, cerebral microbleeds, lacunae, and perivascular spaces, respectively. In this study, we aimed to develop a fully automatic, multi-output multi-lesion recognition and segmentation algorithm that can be used to detect and segment four types of cerebral small vessel diseases on multi-sequence MRI brain images.
 
-Directory
 - base/: Network basic module
 - checkpoints/: Trained model weights
 - encoders/: The encoder structure of segmounet architecture
@@ -19,13 +18,12 @@ Environment settings
 - torch==1.8.1+cu111
 
 Data set
-
 - Training: The training folder contains .npy files with corresponding names under the img and mask files
-      for example：
-        img
-              1.npy
-              2.npy
-              3.npy ... 
+for example：
+      img
+            1.npy
+            2.npy
+            3.npy ... 
         mask
               1.npy
               2.npy
