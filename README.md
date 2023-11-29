@@ -19,7 +19,8 @@ Environment settings
 - torch==1.8.1+cu111
 
 Data set
--Training: The training folder contains .npy files with corresponding names under the img and mask files.
+
+- Training: The training folder contains .npy files with corresponding names under the img and mask files.
 
     --img
       ---1.npy
