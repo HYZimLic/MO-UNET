@@ -22,14 +22,14 @@ Data set
 
 - Training: The training folder contains .npy files with corresponding names under the img and mask files
       for example：
-        --img 
-          ---1.npy
-          ---2.npy
-          ---3.npy ... 
-        --mask
-          ---1.npy
-          ---2.npy
-          ---3.npy ...
+        img
+              1.npy
+              2.npy
+              3.npy ... 
+        mask
+              1.npy
+              2.npy
+              3.npy ...
 - Testing
 - 
     --img
