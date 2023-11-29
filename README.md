@@ -26,11 +26,13 @@ Data set
       ---1.npy
       ---2.npy
       ---3.npy ...
+      
     --mask
       ---1.npy
       ---2.npy
       ---3.npy ...
 - Testing
+  
   -test
     --img
       ---1.npy
