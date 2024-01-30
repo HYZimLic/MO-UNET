@@ -10,24 +10,13 @@ from torch import optim
 from torch.backends import cudnn
 from tqdm import tqdm
 from eval import eval_net
-from unet.model import segmounet
-import segmentation_models_pytorch as smp
+from unet.AEmodel import AE
 from utils.dataset import BasicDataset
 from torch.utils.data import DataLoader, random_split
 
-dir_img = '/home/operations/Documents/20230712/img1/'
-dir_mask = '/home/operations/Documents/20230712/mask1/'
+dir_img = '\img/'
+dir_mask = '\img/'
 dir_checkpoint = 'checkpoints/'
-
-def set_freeze_by_names(model, layer_names, freeze=True):
-    if not isinstance(layer_names, Iterable):
-        layer_names = [layer_names]
-    for name, child in model.named_children():
-        if name in layer_names:
-            print(name + '  is not freezed')
-            continue
-        for param in child.parameters():
-            param.requires_grad = not freeze
 
 
 def train_net(net,
@@ -47,7 +36,6 @@ def train_net(net,
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True, drop_last=False)
 
-    # writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SCALE_{img_scale}')
     global_step = 0
 
     logging.info(f'''Starting training:
@@ -65,10 +53,7 @@ def train_net(net,
     # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=int(epochs/10))
 
-    # if net.n_classes > 1:
-    #     criterion = nn.CrossEntropyLoss()
-    # else:
-    #     criterion = nn.BCEWithLogitsLoss()
+
     criterion = nn.BCEWithLogitsLoss()
 
     for epoch in range(epochs):
@@ -79,10 +64,7 @@ def train_net(net,
             for batch in train_loader:
                 imgs = batch['image']
                 true_masks = batch['mask']
-                # assert imgs.shape[1] == net.n_channels, \
-                #     f'Network has been defined with {net.n_channels} input channels, ' \
-                #     f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
-                #     'the images are loaded correctly.'
+
                 assert imgs.shape[1] == 1, \
                     f'Network has been defined with {net.n_channels} input channels, ' \
                     f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
@@ -91,36 +73,30 @@ def train_net(net,
                 # mask_type = torch.float32 if net.n_classes == 1 else torch.long
                 mask_type = torch.float32
                 true_masks = true_masks.to(device=device, dtype=mask_type)
+
                 masks_pred = net(imgs)
                 loss = criterion(masks_pred, true_masks)
                 epoch_loss += loss.item()
-                # writer.add_scalar('Loss/train', loss.item(), global_step)
+
+
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
+
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_value_(net.parameters(), 0.1)
                 optimizer.step()
+
                 pbar.update(imgs.shape[0])
                 global_step += 1
                 if global_step % (n_train // (batch_size)) == 0:
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
-                        # writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
-                        # writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
+
                     val_score = eval_net(net, val_loader, device)
                     scheduler.step(val_score)
-                    # writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
-                    # if net.n_classes > 1:
-                    #     logging.info('Validation cross entropy: {}'.format(val_score))
-                    #     #writer.add_scalar('Loss/test', val_score, global_step)
-                    # else:
-                    #     logging.info('Validation Dice Coeff: {}'.format(val_score))
+
                     logging.info('Validation Dice Coeff: {}'.format(val_score))
-                    # writer.add_scalar('Dice/test', val_score, global_step)
-                    # writer.add_images('images', imgs[:, 1:2, :, :], global_step)
-                    # if net.n_classes == 1:
-                    # writer.add_images('masks/true', true_masks, global_step)
-                    # writer.add_images('masks/pred', torch.sigmoid(masks_pred) > 0.1, global_step)
+
         scheduler.step()
         if save_cp:
             try:
@@ -131,7 +107,8 @@ def train_net(net,
             torch.save(net.state_dict(),
                        dir_checkpoint + f'CP_epoch{epoch + 1}.pth')
             logging.info(f'Checkpoint {epoch + 1} saved !')
-    # writer.close()
+
+
 
 
 def get_args():
@@ -143,11 +120,11 @@ def get_args():
                         help='Batch size', dest='batchsize')
     parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.001,
                         help='Learning rate', dest='lr')
-    parser.add_argument('-f', '--load', dest='load', type=str, default='...',
+    parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
     parser.add_argument('-s', '--scale', dest='scale', type=float, default=1.0,
                         help='Downscaling factor of the images')
-    parser.add_argument('-v', '--validation', dest='val', type=float, default=10.0,
+    parser.add_argument('-v', '--validation', dest='val', type=float, default=5.0,
                         help='Percent of the data that is used as validation (0-100)')
 
     return parser.parse_args()
@@ -159,34 +136,20 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    # Change here to adapt to your data
-    # n_channels=3 for RGB images
-    # n_classes is the number of probabilities you want to get per pixel
-    #   - For 1 class and background, use n_classes=1
-    #   - For 2 classes, use n_classes=1
-    #   - For N > 2 classes, use n_classes=N
-    net = segmounet(
+    net = AE(
     encoder_name="efficientnet-b3",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
     in_channels=1,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
     classes=1,                      # model output channels (number of classes in your dataset)
 )
-    # summary(net, input_size=(1, 1, 512, 512))
-    # print(summary)
-    # logging.info(f'Network:\n'
-    #              f'\t{net.n_channels} input channels\n'
-    #              f'\t{net.n_classes} output channels (classes)\n'
-    #              f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
-    # for name, module in net.named_children():
-    #     print('children module:', name)
+    print(net)
+
 
     if args.load:
         net.load_state_dict(
             torch.load(args.load, map_location=device)
         )
         logging.info(f'Model loaded from {args.load}')
-    
-    set_freeze_by_names(net, ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'segmentation_head1', 'segmentation_head2', 'segmentation_head3', 'segmentation_head4'])
 
     net.to(device=device)
     # faster convolutions, but more memory
